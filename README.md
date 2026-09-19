@@ -10,6 +10,10 @@ This is a runnable starter, not a deployed service. The Drive folder is a placeh
 in `config/source.example.json`; automatic Drive synchronization is not implemented.
 Everyone should use the same vector store ID. No company files have been uploaded.
 
+To try fictional company documents, use the [sample corpus](samples/README.md)
+and its [14 evaluation questions](samples/questions.md). For the ChatGPT side,
+follow [Connect your own GPT](docs/connect-your-gpt.md).
+
 ## 1. Local configuration
 
 Requires Node.js 22 or later. No npm dependencies are needed.
