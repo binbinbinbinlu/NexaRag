@@ -1,5 +1,10 @@
 # Ask questions using your own custom GPT
 
+For illustrated instructions and current account restrictions, see the
+[detailed setup guide](setup-guide.md). As of 19 September 2026, OpenAI says new
+GPT creation is unavailable on personal accounts; existing GPTs may remain editable,
+and managed workspaces may allow creation. Check the linked official guidance there.
+
 NexaRag is a search service that your custom GPT calls through an Action. Your GPT
 keeps its own instructions and uses the returned excerpts to answer company questions.
 

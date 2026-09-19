@@ -6,9 +6,14 @@ the teammate's GPT writes the answer with source citations.
 
 `Company Drive → manual export/upload → shared vector store → protected search API → teammate's custom GPT`
 
-This is a runnable starter, not a deployed service. The Drive folder is a placeholder
-in `config/source.example.json`; automatic Drive synchronization is not implemented.
-Everyone should use the same vector store ID. No company files have been uploaded.
+The demo is deployed at `https://nexarag-fypg.onrender.com` with four fictional
+documents. The Drive folder is a placeholder in `config/source.example.json`;
+automatic Drive synchronization is not implemented. Everyone should use the same
+approved vector store ID. No real company files have been uploaded.
+
+Start with the detailed [setup guide with screenshots](docs/setup-guide.md), also
+available as a [PDF](docs/NexaRag-setup-guide.pdf). Check its current ChatGPT account
+requirements before trying to create a new GPT.
 
 To try fictional company documents, use the [sample corpus](samples/README.md)
 and its [14 evaluation questions](samples/questions.md). For the ChatGPT side,
