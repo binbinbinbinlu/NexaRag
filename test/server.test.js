@@ -1,112 +1,52 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { createServer, hashToken, validateMembers } from '../src/server.js';
-import { openai } from '../src/openai.js';
+import { fixture, credential } from './helpers.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-const token = 'test-token-with-at-least-32-characters';
-const members = [{ id: 'alice', tokenHash: hashToken(token), vectorStoreId: 'vs_shared' }];
-async function fixture(t, options = {}) {
-  const calls = [];
-  const server = createServer({ members, search: async (...args) => { calls.push(args); return [{ filename: 'Policy.txt', citation: 'S1', excerpts: 'Ask your manager.' }]; }, ...options });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
-  const url = `http://127.0.0.1:${server.address().port}`;
-  const post = (body, credential = token) => fetch(`${url}/search`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${credential}` }, body: JSON.stringify(body) });
-  return { url, post, calls };
-}
-
-test('authenticated retrieval selects configured store and returns citation', async t => {
-  const { post, calls } = await fixture(t);
-  const result = await post({ query: ' Leave policy? ', limit: 2 });
-  assert.equal(result.status, 200);
-  assert.equal((await result.json()).sources[0].citation, 'S1');
-  assert.deepEqual(calls, [['vs_shared', 'Leave policy?', 2]]);
+test('official SDK initializes, lists and calls the authenticated MCP tool',async t=>{
+ const f=await fixture(t); const {tokens}=await f.login();
+ const client=new Client({name:'integration-test',version:'1.0.0'});
+ t.after(()=>client.close());
+ await client.connect(new StreamableHTTPClientTransport(new URL(f.url+'/mcp'),{requestInit:{headers:{Authorization:`Bearer ${tokens.access_token}`}}}));
+ const list=await client.listTools(); assert.equal(list.tools.length,1); const tool=list.tools[0];
+ assert.equal(tool.name,'search_company_knowledge'); assert.equal(tool.annotations.readOnlyHint,true);
+ assert.equal(tool.inputSchema.additionalProperties,false);
+ assert.deepEqual(tool._meta.securitySchemes,[{type:'oauth2',scopes:['knowledge:read']}]);
+ const result=await client.callTool({name:tool.name,arguments:{query:' Leave policy? ',limit:2}});
+ assert.equal(result.structuredContent.sources[0].citation,'S1'); assert.deepEqual(f.calls,[['vs_shared','Leave policy?',2]]);
 });
-test('invalid tokens never reach retrieval', async t => {
-  const { post, calls } = await fixture(t);
-  assert.equal((await post({ query: 'policy' }, 'wrong-token')).status, 401);
-  assert.equal((await post({ query: 'policy' }, '')).status, 401);
-  assert.equal(calls.length, 0);
+test('unauthenticated and legacy credentials cannot read MCP; discovery is public',async t=>{
+ const f=await fixture(t);
+ for(const token of [undefined,'wrong',credential]) { const r=await f.rpc('tools/list',{},token); assert.equal(r.status,401); assert.match(r.headers.get('www-authenticate'),/oauth-protected-resource\/mcp/); }
+ const metadata=await (await fetch(f.url+'/.well-known/oauth-protected-resource/mcp')).json(); assert.equal(metadata.resource,f.resource);
+ const oauth=await (await fetch(f.url+'/.well-known/oauth-authorization-server')).json(); assert.deepEqual(oauth.code_challenge_methods_supported,['S256']); assert.deepEqual(oauth.grant_types_supported,['authorization_code']);
+ assert.deepEqual(f.calls,[]);
 });
-test('rejects caller-selected stores and invalid queries', async t => {
-  const { post, calls } = await fixture(t);
-  for (const body of [null, [], { query: '' }, { query: 'x', vectorStoreId: 'vs_secret' }, { query: 'x', limit: 6 }, { query: 'x'.repeat(2001) }]) {
-    assert.equal((await post(body)).status, 400);
-  }
-  assert.equal(calls.length, 0);
+test('MCP validates query, limits and forbids caller-selected stores',async t=>{
+ const f=await fixture(t); const {tokens}=await f.login();
+ for(const args of [{query:''},{query:'x'.repeat(2001)},{query:'x',limit:6},{query:'x',vectorStoreId:'vs_secret'},null]) {
+  const r=await (await f.rpc('tools/call',{name:'search_company_knowledge',arguments:args},tokens.access_token)).json(); assert.ok(r.error||r.result?.isError);
+ }
+ assert.equal(f.calls.length,0);
 });
-test('rate limits authenticated callers', async t => {
-  const { post } = await fixture(t, { requestsPerMinute: 1 });
-  assert.equal((await post({ query: 'x' })).status, 200);
-  const response = await post({ query: 'x' });
-  assert.equal(response.status, 429);
-  assert.ok(response.headers.get('retry-after'));
+test('unknown tools do not reach retrieval; upstream errors are sanitized',async t=>{
+ const f=await fixture(t,{search:async()=>{throw new Error('secret API key');}}); const {tokens}=await f.login();
+ const missing=await (await f.rpc('tools/call',{name:'delete_file',arguments:{}},tokens.access_token)).json(); assert.ok(missing.error||missing.result?.isError);
+ const r=await (await f.rpc('tools/call',{name:'search_company_knowledge',arguments:{query:'x'}},tokens.access_token)).json(); assert.equal(r.result.isError,true); assert.doesNotMatch(JSON.stringify(r),/secret API/);
 });
-test('upstream errors do not expose secrets', async t => {
-  const { post } = await fixture(t, { search: async () => { throw new Error('secret upstream data'); } });
-  const response = await post({ query: 'x' });
-  assert.equal(response.status, 502);
-  assert.doesNotMatch(await response.text(), /secret/);
+test('empty evidence stays empty',async t=>{
+ const f=await fixture(t,{search:async()=>[]}); const {tokens}=await f.login(); const r=await (await f.rpc('tools/call',{name:'search_company_knowledge',arguments:{query:'unknown'}},tokens.access_token)).json(); assert.deepEqual(r.result.structuredContent,{sources:[]});
 });
-test('empty retrieval remains empty and schema declares authentication', async t => {
-  const { post, url } = await fixture(t, { search: async () => [] });
-  assert.deepEqual(await (await post({ query: 'unknown' })).json(), { sources: [] });
-  const schema = await (await fetch(`${url}/openapi.json`)).json();
-  assert.deepEqual(schema.paths['/search'].post.security, [{ bearerAuth: [] }]);
+test('rate limits authenticated MCP requests',async t=>{
+ const f=await fixture(t,{requestsPerMinute:1}); const {tokens}=await f.login(); assert.equal((await f.rpc('tools/list',{},tokens.access_token)).status,200); const r=await f.rpc('tools/list',{},tokens.access_token); assert.equal(r.status,429); assert.ok(r.headers.get('retry-after'));
 });
-test('configuration fails closed', () => {
-  assert.throws(() => validateMembers([]));
-  assert.throws(() => validateMembers([...members, ...members]));
-  assert.throws(() => validateMembers([{ ...members[0], tokenHash: 'placeholder' }]));
+test('rejects untrusted origins, malformed and oversized payloads',async t=>{
+ const f=await fixture(t); const {tokens}=await f.login();
+ assert.equal((await f.rpc('tools/list',{},tokens.access_token,{Origin:'https://evil.example'})).status,403);
+ for(const [body,status] of [['{',400],['x'.repeat(17000),413]]) { const r=await fetch(f.url+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body}); assert.equal(r.status,status); }
 });
-test('live and documented schemas include the schemas object required by GPT Actions', async t => {
-  const { url } = await fixture(t);
-  const live = await (await fetch(`${url}/openapi.json`)).json();
-  const documented = JSON.parse(await readFile(new URL('../docs/openapi.json', import.meta.url), 'utf8'));
-  for (const spec of [live, documented]) {
-    assert.ok(spec.components.schemas !== null && typeof spec.components.schemas === 'object');
-    assert.equal(Array.isArray(spec.components.schemas), false);
-    assert.equal(spec.components.securitySchemes.bearerAuth.scheme, 'bearer');
-  }
-  assert.deepEqual({ ...live, servers: documented.servers }, documented);
-});
-test('rejects malformed JSON and unsupported content type', async t => {
-  const { url, calls } = await fixture(t);
-  for (const [type, body] of [['application/json', '{'], ['text/plain', '{"query":"policy"}']]) {
-    const response = await fetch(`${url}/search`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': type }, body });
-    assert.equal(response.status, 400);
-  }
-  assert.equal(calls.length, 0);
-});
-test('rejects oversized requests before retrieval', async t => {
-  const { post, calls } = await fixture(t);
-  assert.equal((await post({ query: 'x'.repeat(17000) })).status, 413);
-  assert.equal(calls.length, 0);
-});
-test('public routes expose liveness and schema but no credentials', async t => {
-  const { url } = await fixture(t);
-  const health = await fetch(`${url}/health`);
-  assert.deepEqual(await health.json(), { status: 'ok' });
-  assert.equal(health.headers.get('cache-control'), 'no-store');
-  const schema = await (await fetch(`${url}/openapi.json`)).text();
-  assert.ok(!schema.includes(token) && !schema.includes(members[0].tokenHash));
-  assert.equal((await fetch(`${url}/search`)).status, 404);
-  assert.equal((await fetch(`${url}/unknown`)).status, 404);
-});
-test('separate credentials have isolated rate limits and configured stores', async t => {
-  const bobToken = 'another-test-token-at-least-32-characters';
-  const { post, calls } = await fixture(t, { requestsPerMinute: 1, members: [...members, { id: 'bob', tokenHash: hashToken(bobToken), vectorStoreId: 'vs_bob' }] });
-  assert.equal((await post({ query: 'alice' })).status, 200);
-  assert.equal((await post({ query: 'alice again' })).status, 429);
-  assert.equal((await post({ query: 'bob' }, bobToken)).status, 200);
-  assert.deepEqual(calls, [['vs_shared', 'alice', 5], ['vs_bob', 'bob', 5]]);
-});
-test('OpenAI transport sets auth and serializes search request', async () => {
-  let call;
-  const result = await openai('/vector_stores/vs_shared/search', { apiKey: 'test-key', body: { query: 'policy' }, fetchImpl: async (...args) => { call = args; return { ok: true, json: async () => ({ data: [] }) }; } });
-  assert.deepEqual(result, { data: [] });
-  assert.equal(call[0], 'https://api.openai.com/v1/vector_stores/vs_shared/search');
-  assert.equal(call[1].headers.Authorization, 'Bearer test-key');
-  assert.deepEqual(JSON.parse(call[1].body), { query: 'policy' });
+test('old GPT Action endpoints are removed and health identifies MCP',async t=>{
+ const f=await fixture(t); assert.equal((await (await fetch(f.url+'/health')).json()).integration,'mcp');
+ for(const path of ['/openapi.json','/search']) assert.equal((await fetch(f.url+path)).status,404);
 });

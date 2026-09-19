@@ -1,0 +1,25 @@
+{
+  "name": "nexarag",
+  "version": "2.0.0",
+  "description": "Search approved company knowledge and answer with source citations.",
+  "author": {
+    "name": "NexaRag team"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "NexaRag",
+    "shortDescription": "Company answers with document citations",
+    "longDescription": "Search approved company documents through an authenticated MCP connection. Use returned evidence and identify missing information. The current demo uses fictional company documents.",
+    "developerName": "NexaRag team",
+    "category": "Productivity",
+    "capabilities": [
+      "Read"
+    ],
+    "defaultPrompt": [
+      "How far ahead should I request annual leave?",
+      "What is the Aurora project budget?"
+    ]
+  },
+  "mcpServers": "./.mcp.json",
+  "repository": "https://github.com/binbinbinbinlu/NexaRag"
+}

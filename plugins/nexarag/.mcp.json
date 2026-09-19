@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nexarag": {
+      "type": "http",
+      "url": "https://nexarag-fypg.onrender.com/mcp"
+    }
+  }
+}

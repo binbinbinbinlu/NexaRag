@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openai } from '../src/openai.js';
-import { schema } from '../src/schema.js';
-import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { hashToken } from '../src/server.js';
 
@@ -29,10 +27,6 @@ test('GET requests omit the body', async () => {
     assert.equal(options.body, undefined);
     return { ok: true, json: async () => ({ id: 'file-sample' }) };
   } });
-});
-test('checked-in Action schema matches the generated contract', async () => {
-  const stored = JSON.parse(await readFile(new URL('../docs/openapi.json', import.meta.url), 'utf8'));
-  assert.deepEqual(stored, schema('https://YOUR-COMPANY-KNOWLEDGE-DOMAIN.example'));
 });
 test('admin token command generates unique matching hashes without credentials', () => {
   const run = () => JSON.parse(execFileSync(process.execPath, ['src/admin.js', 'token'], { encoding: 'utf8', env: { ...process.env, OPENAI_API_KEY: '' } }));

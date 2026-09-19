@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { openai } from './openai.js';
-import { hashToken } from './server.js';
+import { hashToken } from './auth.js';
 
 const [command, arg, extra] = process.argv.slice(2);
 try {
