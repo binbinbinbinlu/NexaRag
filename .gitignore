@@ -3,4 +3,6 @@ config/members.json
 data/
 node_modules/
 dist/
+test-results/
+playwright-report/
 *.log

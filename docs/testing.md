@@ -2,6 +2,8 @@
 
 Install pinned dependencies with `pnpm install --frozen-lockfile`; run `node --test`. Offline tests use fake credentials and stub retrieval. They do not spend OpenAI credits.
 
+Run `pnpm exec playwright install chromium` once, then `pnpm test:browser` for the browser regression. It submits the real HTML consent form in Chromium with fake credentials, follows the cross-origin callback, and exchanges the code with PKCE. This catches browser Referrer-Policy and CSP redirect failures that API-only tests cannot detect. CI runs this separately on Linux.
+
 The suite checks official MCP SDK initialization/tool listing/tool calling; input and output schemas; citations and empty evidence; OAuth discovery, dynamic registration, browser binding, PKCE, client/resource/redirect binding, single-use codes, expiry, tampering, rotation and revocation; unauthenticated rejection; origin and body limits; per-member rate limits; sanitized upstream failures; admin token generation; and ChatGPT package app references without desktop MCP declarations.
 
 GitHub Actions runs the suite on Windows/Linux/macOS with Node 22 and 24. A local test pass does not prove every hosted matrix job passed or that a ChatGPT account is connected.

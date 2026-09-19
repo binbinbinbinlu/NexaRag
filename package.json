@@ -10,11 +10,15 @@
   "scripts": {
     "start": "node --env-file=.env src/server.js",
     "test": "node --test",
+    "test:browser": "playwright test",
     "admin": "node --env-file=.env src/admin.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "express": "5.2.1",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
   }
 }
