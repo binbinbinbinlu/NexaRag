@@ -1,9 +1,9 @@
 import http from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { schema } from './schema.js';
 import { searchStore } from './openai.js';
+import { loadConfig } from './config.js';
 
 export const hashToken = token => createHash('sha256').update(token).digest('hex');
 
@@ -11,7 +11,7 @@ export function validateMembers(members) {
   if (!Array.isArray(members) || members.length === 0) throw new Error('Configure at least one member');
   const ids = new Set(), hashes = new Set();
   for (const m of members) {
-    if (!m.id || !/^[a-f0-9]{64}$/.test(m.tokenHash) || !/^vs_[a-zA-Z0-9]+$/.test(m.vectorStoreId) || ids.has(m.id) || hashes.has(m.tokenHash)) {
+    if (!m || typeof m.id !== 'string' || !m.id.trim() || !/^[a-f0-9]{64}$/.test(m.tokenHash) || !/^vs_[a-zA-Z0-9]+$/.test(m.vectorStoreId) || ids.has(m.id) || hashes.has(m.tokenHash)) {
       throw new Error('Invalid or duplicate member configuration');
     }
     ids.add(m.id); hashes.add(m.tokenHash);
@@ -66,10 +66,6 @@ export function createServer({ members, baseUrl = 'http://localhost:3000', searc
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (!process.env.OPENAI_API_KEY) throw new Error('Set OPENAI_API_KEY in .env');
-  const baseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
-  const url = new URL(baseUrl);
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('Public deployments require HTTPS');
-  const members = JSON.parse(await readFile(process.env.MEMBERS_FILE ?? 'config/members.json', 'utf8'));
-  createServer({ members, baseUrl }).listen(Number(process.env.PORT ?? 3000), process.env.HOST ?? '127.0.0.1', () => console.log(`Company RAG listening; schema: ${baseUrl}/openapi.json`));
+  const { members, baseUrl, port, host } = await loadConfig();
+  createServer({ members, baseUrl }).listen(port, host, () => console.log(`Company RAG listening; schema: ${baseUrl}/openapi.json`));
 }

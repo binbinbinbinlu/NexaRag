@@ -108,6 +108,9 @@ run a real search after configuring the API key and uploading a document.
 
 ## 4. Host the API
 
+For a new hosted demo, follow [Deploy to Render](docs/render.md). The repository
+includes a Render Blueprint and supports member configuration via `MEMBERS_JSON`.
+
 Deploy the included Dockerfile to your company's container host behind HTTPS.
 Set `OPENAI_API_KEY`, `PUBLIC_BASE_URL=https://your-company-knowledge-domain`, and
 `MEMBERS_FILE=/run/config/members.json`. Mount the real members file read-only at
