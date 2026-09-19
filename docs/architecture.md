@@ -1,61 +1,25 @@
-# Architecture and access model
+# Architecture
 
-## Request flow
+ChatGPT/Codex -> NexaRag plugin skill + OAuth MCP connection -> `/mcp` -> authorized member's OpenAI vector store -> cited excerpts -> answer.
 
-1. A teammate asks their custom GPT a company question.
-2. The GPT sends a query and optional result limit to `POST /search` using its
-   configured Bearer credential.
-3. The server hashes the credential and compares it with configured member hashes.
-4. The server chooses the member's vector store, applies a rate limit, and validates
-   the request. A caller cannot supply a store ID or change permissions.
-5. OpenAI searches the store and returns document excerpts. The server returns
-   filenames, file IDs, relevance scores, excerpts, and source identifiers.
-6. The custom GPT uses those excerpts to compose and cite its answer.
+The tool is `search_company_knowledge`, with `query` (1-2000 characters) and optional `limit` (1-5). Its strict schema rejects caller-selected store IDs. It is read-only, non-destructive, and searches a bounded corpus. The server returns `sources` with filename, file ID, citation identifier, score, and excerpt text. There is no UI widget or server-generated answer.
 
-The service performs retrieval, not answer generation. Answer quality and citation
-faithfulness must also be checked in the GPT; passing API tests alone cannot verify
-the model's responses. Source identifiers such as S1 are local to one search.
+## Transport
 
-## Components
+The official MCP SDK implements stateless Streamable HTTP with JSON responses. Each authenticated POST creates a request-local server and transport. There are no persistent MCP sessions or standalone SSE streams. SDK clients initialize, list tools, and call the tool. Origin checks reject untrusted browser origins. HTTPS is required outside localhost. Request bodies are limited to 16 KiB and MCP calls to 30 per minute per member per process.
 
-| File | Responsibility |
-| --- | --- |
-| `src/server.js` | HTTP routing, authentication, configuration validation, limits |
-| `src/openai.js` | OpenAI transport and search result formatting |
-| `src/admin.js` | Offline administrator commands for credentials and documents |
-| `src/schema.js` | GPT Action OpenAPI definition |
-| `docs/openapi.json` | Importable schema with a placeholder deployment domain |
-| `config/source.example.json` | Future Drive source placeholder; not consumed by the service |
+## Authentication
 
-## Data and trust boundaries
+The SDK OAuth router provides discovery, dynamic client registration, authorization code exchange, client authentication, and S256 PKCE verification. Resource metadata is at `/.well-known/oauth-protected-resource/mcp`; authorization metadata is at `/.well-known/oauth-authorization-server`.
 
-Use the same vector store ID in all member entries for this company's shared
-knowledge model. Member credentials are separate so integrations can be revoked
-independently. The credential authenticates a GPT integration, not its human user.
-Sharing a configured GPT also grants its users access to this document collection.
+NexaRag allows the documented ChatGPT callback paths and HTTP loopback `/callback` URLs for desktop clients. It rejects arbitrary third-party redirects. The browser consent form is bound to an HttpOnly SameSite cookie, a random expiring flow, and a same-origin check. Users authenticate with high-entropy administrator-issued access codes, stored server-side only as SHA-256 hashes. This is possession-based access, not corporate SSO or email identity verification.
 
-Original files and their index reside in the company's OpenAI API project. Queries
-go to OpenAI for retrieval; returned excerpts enter the teammate's ChatGPT
-conversation. The service keeps no persistent query history. Hosting platform logs
-must be configured separately so they do not capture request bodies or credentials.
+Authorization codes are single use, expire in 60 seconds, and bind the client, redirect, resource, member, and PKCE challenge. Pending consent lasts five minutes. Both are in process memory; a restart during sign-in requires restarting Connect. Completed client registrations and access tokens are AES-256-GCM encrypted, purpose-bound, audience-bound, and survive restarts with unchanged configuration. Access tokens last one hour; refresh tokens and a per-session revocation endpoint are not implemented. Reconnect to renew access.
 
-The OpenAI key grants administrative API access and stays server-side. Teammate
-tokens only authorize search in this service. Store hashes rather than raw tokens
-in the member file. Public health and schema endpoints contain no document data.
+A dedicated `OAUTH_SIGNING_KEY` of at least 32 characters is preferred. If omitted, HKDF derives a purpose-specific encryption key from the existing OpenAI API key and service origin. Neither the key nor member hashes appear in client-visible credentials. Rotating that source key or the public origin invalidates OAuth credentials. Removing a member or replacing its access-code hash and redeploying revokes its existing OAuth access immediately on the new process.
 
-## Current boundaries
+## Storage and permissions
 
-- Drive integration is a placeholder; upload, replacement, and deletion are manual.
-- No OAuth/SSO, document-level ACL synchronization, or per-human identity is present.
-- Rate limits are in memory, per credential, per server process.
-- Health is a liveness check and does not test OpenAI connectivity or index readiness.
-- Search returns up to five excerpts, each truncated to 6,000 characters; context
-  may be incomplete. Relevance scores are not a guarantee of factual support.
-- The GPT instructions discourage following instructions inside documents; they
-  are not an absolute defense against prompt injection.
-- Removing access cannot erase previously retrieved conversation content.
+Approved files and indexes remain in the company's OpenAI project. The Drive configuration is a placeholder. All teammates should have separate access codes pointing to the same approved shared store. The server supports multiple stores administratively; the tool cannot choose one. Logs should not record tokens, codes, queries, or excerpts.
 
-Future automatic Drive ingestion should reconcile a manifest of Drive IDs,
-modification times, and OpenAI file IDs, with explicit handling of deleted files,
-failed indexing, retries, and duplication. Keep the current manual ingestion path
-until the company's Drive provider and folder are specified.
+The desktop plugin includes `.mcp.json`; the ChatGPT web build references a registered app in `.app.json` and omits all MCP declarations. A plugin install does not create provider authorization or grant workspace access.

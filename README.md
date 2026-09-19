@@ -1,168 +1,55 @@
-# Company RAG for your team's custom GPTs
+# NexaRag: company knowledge plugin
 
-Each teammate connects their own custom GPT in ChatGPT to one company knowledge
-API. The API retrieves relevant document excerpts from an OpenAI vector store;
-the teammate's GPT writes the answer with source citations.
+NexaRag lets teammates search the same approved company documents from ChatGPT or Codex. Version 2 replaces custom GPT Actions with an authenticated MCP service and a plugin containing evidence-based answering instructions.
 
-`Company Drive → manual export/upload → shared vector store → protected search API → teammate's custom GPT`
+**MCP endpoint:** https://nexarag-fypg.onrender.com/mcp
 
-The demo is deployed at `https://nexarag-fypg.onrender.com` with four fictional
-documents. The Drive folder is a placeholder in `config/source.example.json`;
-automatic Drive synchronization is not implemented. Everyone should use the same
-approved vector store ID. No real company files have been uploaded.
+**Health:** https://nexarag-fypg.onrender.com/health
 
-Start with the detailed [setup guide with screenshots](docs/setup-guide.md), also
-available as a [PDF](docs/NexaRag-setup-guide.pdf). Check its current ChatGPT account
-requirements before trying to create a new GPT.
+The demo store already contains four fictional documents. The Drive source is still a placeholder; there is no automatic Drive sync. Do not upload real documents until everyone with access is approved to read them.
 
-To try fictional company documents, use the [sample corpus](samples/README.md)
-and its [14 evaluation questions](samples/questions.md). For the ChatGPT side,
-follow [Connect your own GPT](docs/connect-your-gpt.md).
+## Start here
 
-## 1. Local configuration
+- [Detailed plugin setup guide with screenshots](docs/setup-guide.md)
+- [PDF setup guide](docs/NexaRag-setup-guide.pdf)
+- [Connect ChatGPT or Codex](docs/connect-plugin.md)
+- [Mac setup](docs/macos.md), [Render deployment](docs/render.md), [operator runbook](docs/operations.md)
+- [Architecture and authentication](docs/architecture.md), [testing](docs/testing.md), [sample questions](samples/questions.md)
 
-Requires Node.js 22 or later on macOS, Windows, or Linux. No npm dependencies are
-needed. Mac users can follow the complete [macOS setup guide](docs/macos.md).
+## Personal accounts and team distribution
 
-Windows PowerShell:
+Your account is personal or you are not a workspace administrator. Start with an individual MCP connection where developer mode is available, or import the desktop plugin into Codex. Company-wide marketplace publication requires a workspace administrator. Account and product availability are controlled by OpenAI.
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item config/members.example.json config/members.json
-```
-
-macOS/Linux Terminal (zsh or bash):
+The source package in `plugins/nexarag` declares a remote MCP server and can be classified **Desktop only**. For ChatGPT web, first register the connected app in your account, then build a package referencing its real app ID:
 
 ```sh
-cp -n .env.example .env
-cp -n config/members.example.json config/members.json
+node scripts/build-chatgpt-plugin.js asdk_app_YOUR_REAL_ID
 ```
 
-The `node` commands below work on all three platforms. For uploads on macOS, use
-a Mac file path such as `"$HOME/Documents/Employee Handbook.pdf"` instead of `C:\...`.
+This generates `dist/chatgpt/plugins/nexarag` and a marketplace under `dist/chatgpt`. It deliberately omits MCP declarations, so it does not introduce the desktop restriction. The app must still be available and authorized. The generator rejects plugin IDs and never invents an app ID. See the setup guide before importing.
 
-Put the company OpenAI API key in `.env` locally. Do not paste it into ChatGPT
-instructions or distribute it to teammates. API storage/search billing belongs
-to the company API project, separately from teammates' ChatGPT access.
+## Developer setup (Windows, Mac, Linux)
 
-Create the shared store:
+Install Node.js 22 or 24 and Git, then:
 
-```powershell
-node --env-file=.env src/admin.js create-store "Company knowledge"
-```
-
-Copy its `vs_...` ID into every member entry in `config/members.json`.
-Generate a separate credential for each teammate's GPT:
-
-```powershell
-node src/admin.js token
-```
-
-The command prints a secret `token` and its `tokenHash`. Give the token privately
-to that teammate; store only the hash in `config/members.json`. Add one entry per
-teammate with a unique `id`, `tokenHash`, and the shared `vectorStoreId`.
-The server refuses missing, malformed, or duplicate member credentials.
-
-## 2. Add company knowledge
-
-Replace the Drive folder URL placeholder when it is known. This configuration is
-an integration note, not an active connector. Export approved Drive documents to
-supported text-bearing files such as PDF, DOCX, TXT, or Markdown. Use clear filenames
-because these become citations. Upload each exported file explicitly:
-
-```powershell
-node --env-file=.env src/admin.js upload vs_YOUR_ID "C:\path\Employee Handbook.pdf"
-```
-
-The command uploads the file and waits up to five minutes for indexing. Save the
-printed file ID. Files and their indexed content are stored in the company's
-OpenAI API project. Scanned PDFs may require OCR before ingestion.
-
-Uploads are additive: running the same upload twice creates duplicates. To replace
-a document, upload and verify its replacement, then delete the old file by ID:
-
-```powershell
-node --env-file=.env src/admin.js delete-file file-OLD_ID
-```
-
-This deletes that file from OpenAI and all vector stores using it. Deletions can
-take time to disappear from search. There is no Drive deletion or permission sync;
-an administrator must maintain the indexed collection. For a future Drive connector,
-persist Drive file IDs, modification times, and uploaded file IDs, and reconcile
-updates and deletions. All documents in this store must be approved for all teammates.
-
-## 3. Test and start
-
-```powershell
+```sh
+git clone https://github.com/binbinbinbinlu/NexaRag.git
+cd NexaRag
+npm install --global pnpm@11.19.0
+pnpm install --frozen-lockfile
 node --test
+```
+
+Copy `.env.example` to `.env` and `config/members.example.json` to `config/members.json`, preserving existing files. Set the OpenAI project API key only in `.env` or Render. Generate a private member access code with `node src/admin.js token`; put only its hash in the member configuration. All teammate entries should reference the same approved vector store.
+
+```sh
 node --env-file=.env src/server.js
 ```
 
-The local service listens on `127.0.0.1:3000`. `GET /health` checks liveness only;
-`GET /openapi.json` returns the GPT Action schema. `POST /search` requires an
-`Authorization: Bearer <teammate-token>` header and a JSON body:
+Local health is available at http://127.0.0.1:3000/health. Remote ChatGPT needs public HTTPS. The included Dockerfile and Render configuration deploy the service.
 
-```json
-{ "query": "How do I request annual leave?", "limit": 5 }
-```
+## What changed in v2
 
-The service enforces credential-based store selection, input/response size bounds,
-30 requests per minute per credential, and upstream timeouts. It does not log
-questions, retrieved content, or tokens. Tests use a simulated retrieval service;
-run a real search after configuring the API key and uploading a document.
+`/mcp` exposes `search_company_knowledge` using Streamable HTTP. OAuth authorization code + PKCE replaces static Action Bearer tokens. Old member tokens become private sign-in access codes. `/openapi.json` and `/search` have been removed. Existing indexed files stay in the same OpenAI vector store. No new store or duplicate upload is needed.
 
-## 4. Host the API
-
-For a new hosted demo, follow [Deploy to Render](docs/render.md). The repository
-includes a Render Blueprint and supports member configuration via `MEMBERS_JSON`.
-
-Deploy the included Dockerfile to your company's container host behind HTTPS.
-Set `OPENAI_API_KEY`, `PUBLIC_BASE_URL=https://your-company-knowledge-domain`, and
-`MEMBERS_FILE=/run/config/members.json`. Mount the real members file read-only at
-that path. The image contains neither credentials nor company documents. For a
-non-Docker deployment, set `HOST=0.0.0.0` behind your HTTPS reverse proxy.
-
-ChatGPT needs a reachable HTTPS endpoint; localhost cannot serve teammates' GPTs.
-Use a secret manager for production credentials. Configure proxy request-size,
-connection, and rate limits. The included rate limiter is per process; multiple
-replicas need a shared rate limiter. Restart after editing member credentials.
-
-## 5. Connect each teammate's GPT
-
-1. Open the custom GPT editor and add an Action.
-2. Import the schema from `https://your-company-knowledge-domain/openapi.json`.
-3. Select **API Key** authentication with **Bearer**, and enter that teammate's
-   issued token (not the company OpenAI key).
-4. Add the instructions from `docs/gpt-instructions.md` to the GPT's instructions.
-5. Test a question whose answer is in an uploaded document and check its citation.
-6. Keep each GPT private or within your approved company sharing scope.
-
-GPT creation and Actions must be available under your teammates' ChatGPT accounts
-and workspace policies. A credential belongs to the GPT integration, not to the
-signed-in person: anyone able to use a GPT with that credential can retrieve the
-shared documents. For individually authenticated users on shared GPTs, integrate
-your company identity provider using OAuth before rollout. This starter uses
-revocable per-GPT API keys; it does not implement OAuth or SSO.
-
-To revoke a credential, remove its member entry and restart the service. This
-blocks future searches; it cannot remove excerpts already present in conversations.
-
-## Acceptance checks before team rollout
-
-- An authorized GPT answers a known question with the correct filename citation.
-- An unknown question produces no invented company policy.
-- Missing/revoked tokens receive 401, and callers cannot choose another store.
-- Every teammate credential points to the same approved shared store.
-- HTTPS hosting and a real upstream search work from ChatGPT.
-- Your company has approved the documents and ChatGPT accounts used for this flow.
-
-## Official integration references
-
-Project documentation: [architecture](docs/architecture.md),
-[operator runbook](docs/operations.md), and [testing guide](docs/testing.md).
-An importable [Action schema](docs/openapi.json) is also included; replace its
-placeholder server URL with your HTTPS deployment URL before importing it.
-
-- [GPT Actions](https://developers.openai.com/api/docs/actions/introduction)
-- [Action authentication](https://developers.openai.com/api/docs/actions/authentication)
-- [Retrieval and vector stores](https://developers.openai.com/api/docs/guides/retrieval)
+The service returns excerpts; ChatGPT/Codex produces the answer. It does not provide SSO, Drive sync, document writes, or a public plugin-directory listing. Current access tokens last one hour and then require reconnection; refresh tokens are not issued. See the runbook for deployment, credential rotation, and production limits.

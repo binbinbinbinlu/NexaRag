@@ -1,58 +1,21 @@
-# Deploy NexaRag to Render
+# Render deployment
 
-The root `render.yaml` defines a Docker web service with HTTPS, a health check,
-and private environment inputs. It uses the Free instance for the initial demo.
-Free instances sleep after idle time and are not suitable for production reliability.
-Choose an appropriate paid instance separately before a team production rollout.
+The existing service is https://nexarag-fypg.onrender.com. Deploy v2 from `master`; no new vector store is needed. Docker installs the pinned pnpm version and frozen dependency lockfile, then runs Node as an unprivileged user.
 
-## Required configuration
-
-Prepare an OpenAI API project key and an indexed vector store using the root README
-or sample upload instructions. Generate a NexaRag token using `node src/admin.js token`.
-Keep its raw token privately for GPT Action authentication.
-
-In Render, supply these environment variables:
-
-| Name | Value |
+| Setting | Value |
 | --- | --- |
-| `OPENAI_API_KEY` | Company API project key |
-| `MEMBERS_JSON` | Entire member configuration array, with token hashes and store IDs |
+| Runtime | Docker |
+| Dockerfile | ./Dockerfile |
+| Health check | /health |
+| HOST | 0.0.0.0 |
+| OPENAI_API_KEY | Private company OpenAI project key |
+| MEMBERS_JSON | Array of member IDs, token hashes, and approved vector store IDs |
+| OAUTH_SIGNING_KEY | Optional dedicated secret of at least 32 characters |
 
-Example shape only (replace both placeholders):
+Render supplies PORT and RENDER_EXTERNAL_URL. Leave PUBLIC_BASE_URL unset unless using a custom HTTPS domain; never deploy the localhost value. Keep the existing environment values when updating the service. No secret belongs in GitHub or plugin manifests.
 
-```json
-[{"id":"demo-owner","tokenHash":"REPLACE_WITH_GENERATED_SHA256_HASH","vectorStoreId":"vs_REPLACE"}]
-```
+For a new service, connect the private repository and create a Blueprint from `render.yaml` or a Docker web service on master. Configure the variables, deploy, and wait for health. Test public discovery, a 401 on unauthenticated `/mcp`, OAuth sign-in, SDK initialize/list/call, and a real sample retrieval before onboarding users.
 
-The server reads `MEMBERS_JSON` instead of a mounted members file when present.
-Invalid or empty JSON fails startup. The public Action schema uses Render's injected
-`RENDER_EXTERNAL_URL` automatically. Set `PUBLIC_BASE_URL` only if using a custom
-HTTPS domain; do not copy the local localhost value to Render.
+The free instance can sleep while idle and cause connection timeouts. Its local filesystem is ephemeral. OAuth client registrations and completed access tokens survive restarts through encrypted credentials; pending browser flows and authorization codes do not. Rate limits are per process. Choose production hosting and an organizational identity provider separately before a dependable company rollout. This migration does not upgrade the plan or purchase services.
 
-## Create the service
-
-1. Sign in to Render and connect the private `binbinbinbinlu/NexaRag` GitHub repository.
-   Limit the GitHub app's repository access to NexaRag where supported.
-2. Create a new Blueprint from that repository and its `render.yaml` on `master`.
-3. Supply the two environment values above and review the Free instance selection.
-4. Deploy and wait for the service to report healthy.
-5. Open the actual service URL's `/health` and `/openapi.json` endpoints.
-6. Test an authorized search against a known indexed fact and a request without a
-   token (which must return 401).
-7. Import that URL's `/openapi.json` into the custom GPT and configure its Bearer token.
-
-Do not commit secret values. The Docker image excludes `.env`, member files, and
-company documents. Restart/redeploy after changing the environment member list.
-An HTTP 200 health check proves liveness only; it does not prove indexing or OpenAI
-credentials work. A real authenticated search is required before declaring the
-deployment usable.
-
-The service uses no local persistent data. Uploaded source files and the retrieval
-index reside in the company's OpenAI project. OpenAI usage is billed separately.
-Render's Free tier has usage limits and idle startup delays; a cold start can cause
-a GPT Action request to time out. Warm-up testing does not eliminate this production
-limitation.
-
-References: [Blueprint configuration](https://render.com/docs/blueprint-spec),
-[Render environment variables](https://render.com/docs/environment-variables),
-and [Free instance limitations](https://render.com/docs/free).
+OpenAI indexing/retrieval costs are separate from ChatGPT and hosting charges. The service's health endpoint proves liveness, not search quality.

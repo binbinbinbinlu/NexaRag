@@ -25,4 +25,4 @@ Citation identifiers such as S1 depend on the particular search response.
 Score each answer on factual support, correct source attribution, and whether it
 avoids overstating targets, dates, or missing information. A plausible answer without
 a supporting excerpt should fail. This is a manual evaluation set, not evidence
-that live retrieval or a GPT has already passed these checks.
+that live retrieval or a assistant has already passed these checks.

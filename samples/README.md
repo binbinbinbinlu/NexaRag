@@ -40,8 +40,8 @@ Keep the printed file IDs for cleanup. Uploads use the company's OpenAI API proj
 and can incur API charges. Repeating the command uploads duplicates.
 
 Configure a demo member credential with this store ID following the root README.
-After starting and hosting the service, connect your GPT using
-[`docs/connect-your-gpt.md`](../docs/connect-your-gpt.md).
+After starting and hosting the service, connect the plugin using
+[`docs/connect-plugin.md`](../docs/connect-plugin.md).
 
 Ask the questions in [`questions.md`](questions.md) and compare the answers and
 citations. Upload only `documents/*.md`, not this README or the answer sheet.

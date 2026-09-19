@@ -1,67 +1,35 @@
 # Operator runbook
 
-## Initial deployment
+## Members
 
-Follow the commands in the root README to create the store, ingest a small approved
-document, and issue member credentials. Keep production secrets outside source
-control. Deploy the Docker image behind an HTTPS reverse proxy and mount the
-members JSON file read-only. Set the public URL to the externally reachable origin.
+Generate a separate private access code per teammate with `node src/admin.js token`. Send the raw token through an approved private channel. Put only its hash in the member configuration, with a unique ID and the shared approved vector store ID. Preserve other members when editing MEMBERS_JSON. Redeploy to load changes.
 
-For this project every member entry must reference the same shared store. Verify
-that assumption when provisioning accounts; the service also supports separate
-stores, so it does not enforce this organizational policy automatically.
+The teammate enters the code on NexaRag's OAuth consent page, never in chat, plugin files, or OpenAI API settings. The historical local `data/gpt-token.txt` contains the original demo-owner code; its filename does not change its role. Do not distribute that single code to the entire company.
 
-Before onboarding teammates, complete the live checks in `docs/testing.md`.
+Remove a member or replace its hash and redeploy to revoke both old access codes and issued OAuth tokens. An empty member list intentionally fails startup; stop the service to revoke everyone. Revocation cannot remove excerpts already saved in chats. For a compromised OAuth encryption secret, rotate OAUTH_SIGNING_KEY and reconnect clients. Without that variable, rotating OPENAI_API_KEY also rotates the derived OAuth key.
 
-## Onboard or revoke a GPT
+## Documents
 
-Run `node src/admin.js token` privately, save the hash in the member configuration,
-and give the raw token to the intended GPT owner through a private channel. Restart
-the service to reload configuration. The owner enters the token in the Action's
-Bearer authentication field. Never put it in GPT instructions.
+Keep a private inventory of Drive source, filename, upload date, OpenAI file ID, and store ID. The Drive folder in config/source.example.json is not synced. Export approved files manually and upload them with:
 
-Remove the member entry and restart to revoke access. If rotating a credential,
-replace its hash, restart, and update the GPT Action credential. Old-token requests
-must return 401. Revoking the last member requires stopping the service: startup
-intentionally refuses an empty member list.
+```sh
+node --env-file=.env src/admin.js upload vs_YOUR_ID path/to/document.pdf
+```
 
-## Maintain documents
+Repeated uploads create duplicates. After uploading a replacement, verify retrieval before deleting the old file:
 
-Keep an administrator inventory of source filename, Drive source, upload date,
-OpenAI file ID, and vector store ID. Do not commit company content or this inventory
-if it contains sensitive metadata. Repeated uploads create duplicate files.
+```sh
+node --env-file=.env src/admin.js delete-file file-OLD_ID
+```
 
-For an update, upload the replacement, wait for indexing, check a representative
-query, and then delete the old file. Deleting an OpenAI file removes it from all
-stores that reference it. Search removal can be delayed; if a document must become
-unavailable immediately, pause access until removal is verified.
+Deletion removes the OpenAI file from every store that references it and may take time to affect search. If removal must be immediate, pause access until verified. An upload can complete before indexing fails; inspect the printed file ID before retrying. Never upload the sample answer sheet as source knowledge.
 
-An upload can succeed before attachment or indexing fails. Use the printed file ID
-to inspect the API project's file/store state before retrying; otherwise retries
-can leave duplicates or orphaned uploads. Indexing timeout does not imply deletion
-or failure of the uploaded file.
+## Release
 
-## Troubleshooting
+Run `pnpm install --frozen-lockfile` and `node --test`. GitHub CI covers Node 22/24 on Windows, macOS, and Linux. Deploy the tested commit and smoke-test OAuth plus a real MCP retrieval. Refresh connected-app tool metadata and update the plugin package when skills change. Code rollback does not undo document changes.
 
-| Symptom | Check |
-| --- | --- |
-| Startup fails | API key exists, members JSON is valid, IDs/hashes are unique, HTTPS URL is valid |
-| 401 | GPT Bearer token, corresponding hash, and whether the service restarted after edits |
-| 400 | JSON content type, nonempty query no longer than 2,000 characters, limit 1–5 |
-| 413 | Request body exceeds 16 KiB |
-| 429 | Wait for Retry-After; examine usage of the specific GPT credential |
-| 502 | OpenAI credentials, API project access, vector store ID, connectivity, upstream availability |
-| No useful evidence | Indexing completed, correct store selected, source text extractable, question precise |
-| ChatGPT cannot connect | Public HTTPS routing, Action schema server URL, workspace Action domain policy |
+Version 2 removes the GPT Action endpoints. Rolling back to the pre-migration commit restores the old protocol, but plugins cannot use it. Coordinate server and client versions. Keep the indexed store intact during migration.
 
-The endpoint intentionally hides upstream error details from clients. Diagnose
-using the company's API dashboard and infrastructure monitoring without logging
-secrets or company excerpts. Back up member hashes and the source inventory securely.
+## Limits
 
-## Release and rollback
-
-Run `node --test` before release. GitHub Actions runs the same offline suite on
-Windows/Linux/macOS and Node 22/24. Deploy an immutable image tied to the tested commit.
-After deployment, verify health, authorized retrieval, unauthorized rejection, and
-one GPT answer. Roll back the image if these fail. Document uploads and deletions
-are independent of image deployment and are not reversed by a code rollback.
+This is a single-service shared-corpus deployment with access-code login, not SSO. One-hour OAuth access requires reconnecting; refresh tokens are not issued. Free Render cold starts, process-local rate limits, and pending-flow loss on restart are demo constraints. Avoid logging credentials, authorization URLs, document excerpts, or company questions. Back up member configuration and source inventory privately.
