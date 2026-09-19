@@ -55,6 +55,9 @@ not invent a number. See `samples/questions.md` for more checks.
 
 ## When it does not work
 
+- “In components section, schemas subsection is not an object”: re-import the
+  updated live schema, or add `"schemas": {}` inside `components`, alongside
+  `securitySchemes`. GPT Actions requires this object even with inline schemas.
 - No Action option: check GPT editing access and workspace policies.
 - Connection error: the server must be running on reachable HTTPS, not localhost.
 - 401: check your NexaRag token and restart the server after updating member hashes.

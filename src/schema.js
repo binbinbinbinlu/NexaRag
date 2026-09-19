@@ -31,6 +31,7 @@ export function schema(baseUrl) {
         },
       } },
     },
-    components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' } } },
+    // GPT Actions requires this object even when every data schema is inline.
+    components: { schemas: {}, securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' } } },
   };
 }

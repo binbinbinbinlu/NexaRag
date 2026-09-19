@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createServer, hashToken, validateMembers } from '../src/server.js';
 import { openai } from '../src/openai.js';
 
@@ -58,6 +59,17 @@ test('configuration fails closed', () => {
   assert.throws(() => validateMembers([]));
   assert.throws(() => validateMembers([...members, ...members]));
   assert.throws(() => validateMembers([{ ...members[0], tokenHash: 'placeholder' }]));
+});
+test('live and documented schemas include the schemas object required by GPT Actions', async t => {
+  const { url } = await fixture(t);
+  const live = await (await fetch(`${url}/openapi.json`)).json();
+  const documented = JSON.parse(await readFile(new URL('../docs/openapi.json', import.meta.url), 'utf8'));
+  for (const spec of [live, documented]) {
+    assert.ok(spec.components.schemas !== null && typeof spec.components.schemas === 'object');
+    assert.equal(Array.isArray(spec.components.schemas), false);
+    assert.equal(spec.components.securitySchemes.bearerAuth.scheme, 'bearer');
+  }
+  assert.deepEqual({ ...live, servers: documented.servers }, documented);
 });
 test('rejects malformed JSON and unsupported content type', async t => {
   const { url, calls } = await fixture(t);
