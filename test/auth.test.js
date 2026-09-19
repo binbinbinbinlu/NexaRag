@@ -19,9 +19,13 @@ test('authorization checks resource, scope and registered redirect',async t=>{
 });
 test('consent requires browser binding, origin and correct private code',async t=>{
  const f=await fixture(t); const {client}=await f.register(); const flow=await f.start(client);
+ assert.equal(flow.response.headers.get('referrer-policy'),'strict-origin', 'Native form submissions must retain Origin without exposing the authorization URL');
  assert.match(flow.html,/never your OpenAI API key/); assert.doesNotMatch(flow.html,new RegExp(credential));
  assert.equal((await f.consent(flow,credential,{Cookie:''})).status,400);
  assert.equal((await f.consent(flow,credential,{Origin:'https://evil.example'})).status,400);
+ const opaque=await f.consent(flow,credential,{Origin:'null'});
+ assert.equal(opaque.status,400);
+ assert.match(await opaque.text(),/browser could not verify/);
  assert.equal((await f.consent(flow,'wrong-private-code')).status,401);
  assert.equal((await f.consent(flow)).status,303); assert.equal((await f.consent(flow)).status,400);
 });

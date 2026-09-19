@@ -73,6 +73,9 @@ export class NexaAuth {
     this.pending.set(flow, { client, params, csrf, expires: this.now()+300000 });
     res.cookie('nexarag_flow', csrf, { httpOnly: true, secure: this.baseUrl.startsWith('https:'), sameSite: 'lax', path: '/oauth/consent', maxAge: 300000 });
     const nonce = randomBytes(16).toString('base64');
+    // no-referrer makes native form POSTs send Origin: null. Preserve the
+    // same-origin security check without leaking authorization paths or queries.
+    res.set('Referrer-Policy', 'strict-origin');
     res.set('Content-Security-Policy', `default-src 'none'; style-src 'nonce-${nonce}'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
     res.type('html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect NexaRag</title><style nonce="${nonce}">body{font:17px system-ui,sans-serif;background:#edf3f8;color:#173047;margin:0;padding:60px 24px}main{max-width:560px;margin:auto;padding:36px;background:white;border:1px solid #d2dee8;border-radius:16px}h1{font-size:32px;margin-top:0}p{line-height:1.55}label{display:block;font-weight:600}input[type=password]{display:block;width:100%;box-sizing:border-box;padding:12px;margin-top:10px;border:1px solid #8296a8;border-radius:6px;font:inherit}button{background:#185b82;color:white;border:0;padding:13px 22px;border-radius:7px;font:inherit;cursor:pointer}</style><body><main><h1>Connect NexaRag</h1><p>Allow <strong>${escapeHtml(new URL(params.redirectUri).origin)}</strong> to search your approved company documents.</p><p>Permission: read document excerpts. No uploads or edits.</p><form method="post" action="/oauth/consent"><input type="hidden" name="flow" value="${flow}"><label>NexaRag access code <input type="password" name="credential" required autocomplete="off" maxlength="256"></label><p>Use the private code from your administrator, never your OpenAI API key.</p><button type="submit">Connect and allow search</button></form><p>Close this window to cancel. Authorization expires in one hour; connect again when prompted.</p></main></body></html>`);
   }
@@ -80,7 +83,9 @@ export class NexaAuth {
     this.cleanup();
     const flow = this.pending.get(req.body?.flow);
     const cookie = /(?:^|;\s*)nexarag_flow=([^;]+)/.exec(req.headers.cookie ?? '')?.[1];
-    if (!flow || cookie !== flow.csrf || (req.headers.origin && req.headers.origin !== this.baseUrl)) return res.status(400).send('Sign-in expired or invalid. Start Connect again.');
+    if (!flow) return res.status(400).send('This sign-in page expired, was already used, or the service restarted. Close this tab and start Connect again in ChatGPT or Codex.');
+    if (cookie !== flow.csrf) return res.status(400).send('The sign-in cookie is missing or does not match. Allow cookies for NexaRag, close other sign-in tabs, and start Connect again in the same browser.');
+    if (req.headers.origin && req.headers.origin !== this.baseUrl) return res.status(400).send('The browser could not verify this sign-in page. Close this tab and start Connect again to load a fresh page.');
     const member = findMember(this.members, req.body.credential);
     if (!member) return res.status(401).send('Invalid access code. Go back and try again.');
     this.pending.delete(req.body.flow);
