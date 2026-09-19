@@ -12,7 +12,7 @@ safe upstream failures, public schema behavior, request size and content type,
 and OpenAI request construction. Transport responses are simulated, so tests do
 not verify OpenAI availability, billing, or real indexing quality.
 
-GitHub Actions repeats the suite on Windows and Linux using Node 22 and 24.
+GitHub Actions repeats the suite on Windows, Linux, and macOS using Node 22 and 24.
 
 ## Live acceptance test
 

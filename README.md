@@ -16,12 +16,25 @@ follow [Connect your own GPT](docs/connect-your-gpt.md).
 
 ## 1. Local configuration
 
-Requires Node.js 22 or later. No npm dependencies are needed.
+Requires Node.js 22 or later on macOS, Windows, or Linux. No npm dependencies are
+needed. Mac users can follow the complete [macOS setup guide](docs/macos.md).
+
+Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 Copy-Item config/members.example.json config/members.json
 ```
+
+macOS/Linux Terminal (zsh or bash):
+
+```sh
+cp -n .env.example .env
+cp -n config/members.example.json config/members.json
+```
+
+The `node` commands below work on all three platforms. For uploads on macOS, use
+a Mac file path such as `"$HOME/Documents/Employee Handbook.pdf"` instead of `C:\...`.
 
 Put the company OpenAI API key in `.env` locally. Do not paste it into ChatGPT
 instructions or distribute it to teammates. API storage/search billing belongs

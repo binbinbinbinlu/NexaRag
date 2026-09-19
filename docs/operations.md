@@ -61,7 +61,7 @@ secrets or company excerpts. Back up member hashes and the source inventory secu
 ## Release and rollback
 
 Run `node --test` before release. GitHub Actions runs the same offline suite on
-Windows/Linux and Node 22/24. Deploy an immutable image tied to the tested commit.
+Windows/Linux/macOS and Node 22/24. Deploy an immutable image tied to the tested commit.
 After deployment, verify health, authorized retrieval, unauthorized rejection, and
 one GPT answer. Roll back the image if these fail. Document uploads and deletions
 are independent of image deployment and are not reversed by a code rollback.
