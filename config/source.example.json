@@ -1,0 +1,6 @@
+{
+  "provider": "drive-placeholder",
+  "folderUrl": "REPLACE_WITH_COMPANY_DRIVE_FOLDER_URL",
+  "access": "same-documents-for-all-teammates",
+  "sync": "manual-export-and-upload"
+}

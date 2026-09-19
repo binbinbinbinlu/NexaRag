@@ -1,0 +1,5 @@
+.env
+config/members.json
+data/
+node_modules/
+*.log

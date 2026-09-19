@@ -1,0 +1,12 @@
+{
+  "name": "company-rag",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node --env-file=.env src/server.js",
+    "test": "node --test",
+    "admin": "node --env-file=.env src/admin.js"
+  }
+}

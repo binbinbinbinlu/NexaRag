@@ -1,0 +1,7 @@
+[
+  {
+    "id": "teammate-name",
+    "tokenHash": "REPLACE_WITH_SHA256_HASH_FROM_ADMIN_TOKEN_COMMAND",
+    "vectorStoreId": "vs_REPLACE_WITH_APPROVED_KNOWLEDGE_STORE"
+  }
+]
