@@ -5,6 +5,8 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 
 const base = process.argv[2] || 'https://nexarag-fypg.onrender.com';
 const codeFile = process.argv[3];
+const query = process.argv[4] || 'How far ahead should I request annual leave?';
+const expectedFilename = process.argv[5];
 const json = async r => { if (!r.ok) throw new Error(`Request failed (${r.status})`); return r.json(); };
 try {
   const origin = new URL(base);
@@ -31,8 +33,9 @@ try {
     await sdk.connect(new StreamableHTTPClientTransport(new URL(base+'/mcp'),{requestInit:{headers:{Authorization:`Bearer ${tokens.access_token}`}}}));
     const tools = await sdk.listTools();
     if (!tools.tools.some(t=>t.name==='search_company_knowledge')) throw new Error('Search tool missing');
-    const result = await sdk.callTool({name:'search_company_knowledge',arguments:{query:'How far ahead should I request annual leave?',limit:3}});
+    const result = await sdk.callTool({name:'search_company_knowledge',arguments:{query,limit:3}});
     if (result.isError || !result.structuredContent?.sources?.length) throw new Error('Retrieval did not return evidence');
+    if (expectedFilename && !result.structuredContent.sources.some(s=>s.filename===expectedFilename)) throw new Error('Expected source file was not retrieved');
     console.log(JSON.stringify({health:health.status,unauthenticated:denied.status,oauth:'passed',mcp:'passed',sourceFiles:result.structuredContent.sources.map(s=>s.filename)},null,2));
   } finally { await sdk.close(); }
 } catch(error) { console.error(error.message); process.exitCode=1; }
